@@ -25,15 +25,15 @@ func (p PeriodList) NextAvailable(from time.Time, interval time.Duration, fixed 
 		//next, no time slot
 		return from.Add(interval)
 	} else {
-		//next fixed interval (24h max)
+		//next interval (24h max)
 		bt := from
 		if fixed {
 			bt = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 		}
 		inTs := (len(p.TimeSlot) == 0)
-		for ; !bt.After(from) && !inTs; bt = bt.add(interval) {
+		for ; !bt.After(from) && !inTs; bt = bt.Add(interval) {
 			if len(p.TimeSlot) > 0 {
-				for c := range p.TimeSlot {
+				for _, c := range p.TimeSlot {
 					f := time.Date(0, 0, 0, c[0].Hour(), c[0].Minute(), c[0].Second(), c[0].Nanosecond(), from.Location())
 					e := time.Date(0, 0, 0, c[1].Hour(), c[1].Minute(), c[1].Second(), c[1].Nanosecond(), from.Location())
 					if bt.After(f) && bt.Before(e) {
