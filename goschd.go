@@ -17,34 +17,51 @@ type PeriodList struct {
 	HoursOnly bool
 }
 
-// NextAvailable return next date
-func (p PeriodList) NextAvailable(from time.Time, interval time.Duration, fixed bool) time.Time {
-	if interval.Seconds() < 0 || interval.Seconds() >= 86400 {
+// NextStepInPeriod return next date
+func (p PeriodList) NextStepInPeriod(from time.Time, interval time.Duration, fixedStep bool) time.Time {
+	if interval.Nanoseconds() <= 0 {
 		return time.Time{}
-	} else if len(p.TimeSlot) == 0 && !fixed {
+	} else if len(p.TimeSlot) == 0 {
 		//next, no time slot
+		if fixedStep {
+			return from.Truncate(interval).Add(interval)
+		}
 		return from.Add(interval)
 	} else {
-		//next interval (24h max)
+		//search next available
 		bt := from
-		if fixed {
-			bt = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
+		if fixedStep {
+			bt = from.Truncate(interval).Add(interval)
 		}
-		inTs := (len(p.TimeSlot) == 0)
-		for ; !bt.After(from) && !inTs; bt = bt.Add(interval) {
-			if len(p.TimeSlot) > 0 {
-				for _, c := range p.TimeSlot {
-					f := time.Date(0, 0, 0, c[0].Hour(), c[0].Minute(), c[0].Second(), c[0].Nanosecond(), from.Location())
-					e := time.Date(0, 0, 0, c[1].Hour(), c[1].Minute(), c[1].Second(), c[1].Nanosecond(), from.Location())
-					if bt.After(f) && bt.Before(e) {
-						//eligible time slot
-						return bt
+
+		//test each timeslot
+		bestNext := time.Time{}
+		for _, c := range p.TimeSlot {
+			currentBestNext := time.Time{}
+			//invalid timeslot
+			if !c[0].IsZero() && !c[1].IsZero() && c[0].After(c[1]) {
+				continue
+			}
+			nbt := bt.Add(interval)
+			//use starting time
+			if !fixedStep && !c[0].IsZero() && c[0].After(nbt) {
+				currentBestNext = c[0]
+			} else {
+				//inc step...
+				for ; ; nbt = nbt.Add(interval) {
+					if (c[0].IsZero() || nbt.After(c[0])) && (c[1].IsZero() || nbt.Before(c[1])) {
+						currentBestNext = nbt
+						break
 					}
 				}
 			}
+			//ts evaluation terminated
+			if !currentBestNext.IsZero() && (bestNext.IsZero() && currentBestNext.Before(bestNext)) {
+				bestNext = currentBestNext
+			}
 		}
+		return bestNext
 	}
-	return time.Time{}
 }
 
 // Monthdays is a list of a month days
@@ -107,7 +124,6 @@ func (e *Event) CalcNext(from time.Time) {
 	}
 }*/
 
-//////
 // EventSet contains a list a event to launch a task
 type EventSet struct {
 	Events           []Event
