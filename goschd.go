@@ -18,50 +18,66 @@ type PeriodList struct {
 }
 
 // NextStepInPeriod return next date
+// from is last execution time
+// interval is the execution inerval
+// fixedStep = true permit to wok on multiple of interval
 func (p PeriodList) NextStepInPeriod(from time.Time, interval time.Duration, fixedStep bool) time.Time {
-	if interval.Nanoseconds() <= 0 {
-		return time.Time{}
-	} else if len(p.TimeSlot) == 0 {
-		//next, no time slot
+	//undefined from => now
+	if from.IsZero() {
+		from = time.Now()
+	}
+
+	//next, no time slot
+	if len(p.TimeSlot) == 0 {
+		tiRaw := from.Add(interval)
 		if fixedStep {
-			return from.Truncate(interval).Add(interval)
+			return tiRaw.Truncate(interval).Add(interval)
 		}
-		return from.Add(interval)
-	} else {
-		//search next available
-		bt := from
+		return tiRaw
+	}
+
+	//test each timeslot
+	bestNext := time.Time{}
+	for _, c := range p.TimeSlot {
+		currentBestNext := time.Time{}
+		//invalid timeslot
+		if c[0].After(c[1]) {
+			continue
+		}
+		c0 := c[0]
+		c1 := c[1]
+		if p.HoursOnly {
+			c0 = time.Date(from.Year(), from.Month(), from.Day(), c0.Hour(), c0.Minute(), c0.Second(), c0.Nanosecond(), time.Local)
+			c1 = time.Date(from.Year(), from.Month(), from.Day(), c1.Hour(), c1.Minute(), c1.Second(), c1.Nanosecond(), time.Local)
+		}
+		//test time slot
+		nbt := from.Add(interval)
+		if !c0.IsZero() && nbt.Before(c0) {
+			nbt = from
+		}
 		if fixedStep {
-			bt = from.Truncate(interval).Add(interval)
+			nbt = nbt.Truncate(interval).Add(interval)
+		}
+		for ; ; nbt = nbt.Add(interval) {
+			if (c0.IsZero() || nbt.After(c0)) && (c1.IsZero() || nbt.Before(c1)) {
+				currentBestNext = nbt
+				break
+			}
+			if currentBestNext.IsZero() && p.HoursOnly && nbt.After(c1) {
+				nbt = nbt.Add(24 * time.Hour)
+				c0 = time.Date(nbt.Year(), nbt.Month(), nbt.Day(), c0.Hour(), c0.Minute(), c0.Second(), c0.Nanosecond(), time.Local)
+				c1 = time.Date(nbt.Year(), nbt.Month(), nbt.Day(), c1.Hour(), c1.Minute(), c1.Second(), c1.Nanosecond(), time.Local)
+			} else if nbt.After(c1) {
+				break
+			}
 		}
 
-		//test each timeslot
-		bestNext := time.Time{}
-		for _, c := range p.TimeSlot {
-			currentBestNext := time.Time{}
-			//invalid timeslot
-			if !c[0].IsZero() && !c[1].IsZero() && c[0].After(c[1]) {
-				continue
-			}
-			nbt := bt.Add(interval)
-			//use starting time
-			if !fixedStep && !c[0].IsZero() && c[0].After(nbt) {
-				currentBestNext = c[0]
-			} else {
-				//inc step...
-				for ; ; nbt = nbt.Add(interval) {
-					if (c[0].IsZero() || nbt.After(c[0])) && (c[1].IsZero() || nbt.Before(c[1])) {
-						currentBestNext = nbt
-						break
-					}
-				}
-			}
-			//ts evaluation terminated
-			if !currentBestNext.IsZero() && (bestNext.IsZero() && currentBestNext.Before(bestNext)) {
-				bestNext = currentBestNext
-			}
+		//ts evaluation terminated
+		if !currentBestNext.IsZero() && (bestNext.IsZero() && currentBestNext.Before(bestNext)) {
+			bestNext = currentBestNext
 		}
-		return bestNext
 	}
+	return bestNext
 }
 
 // Monthdays is a list of a month days
