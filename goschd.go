@@ -20,7 +20,7 @@ type PeriodList struct {
 // NextStepInPeriod return next date
 // from is last execution time
 // interval is the execution inerval
-// fixedStep = true permit to wok on multiple of interval
+// fixedStep = work on multiple of interval only
 func (p PeriodList) NextStepInPeriod(from time.Time, interval time.Duration, fixedStep bool) time.Time {
 	//undefined from => now
 	if from.IsZero() {
